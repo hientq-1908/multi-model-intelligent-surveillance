@@ -40,8 +40,8 @@ def validate_dataset(manifest_path: Path, *, decode_images: bool = True) -> list
         problems.extend(_shard_reference_problems(records, header.shards))
     elif any(record.image.shard for record in records):
         problems.append("records reference shards but the header lists none")
-    if decode_images and not problems:
-        problems.extend(_image_problems(manifest_path, records))
+    if not problems and (header.shards or decode_images):
+        problems.extend(_image_problems(manifest_path, records, decode_images=decode_images))
     return problems
 
 
@@ -61,16 +61,36 @@ def _shard_reference_problems(records: Sequence[SampleRecord], shards: Sequence[
     return problems
 
 
-def _image_problems(manifest_path: Path, records: Sequence[SampleRecord]) -> list[str]:
+def _image_problems(
+    manifest_path: Path, records: Sequence[SampleRecord], *, decode_images: bool
+) -> list[str]:
+    """Check the stored images, and that they come with exactly the manifest records in order.
+
+    Shard-backed readers yield the records stored in the shards, so those must match the
+    manifest lines or training would see samples the manifest no longer lists.
+    """
     problems = []
+    read = 0
     try:
-        for record, data in iter_image_bytes(manifest_path):
-            try:
-                decode_image(data, record.image)
-            except (OSError, ValueError) as err:
-                problems.append(f"{record.sample_id}: cannot decode image: {err}")
+        for index, (record, data) in enumerate(iter_image_bytes(manifest_path)):
+            read = index + 1
+            if index >= len(records):
+                problems.append(f"{record.sample_id}: stored sample is not in the manifest")
+                continue
+            if record != records[index]:
+                problems.append(
+                    f"position {index}: stored sample {record.sample_id!r} does not match "
+                    f"manifest record {records[index].sample_id!r}"
+                )
+            if decode_images:
+                try:
+                    decode_image(data, record.image)
+                except (OSError, ValueError) as err:
+                    problems.append(f"{record.sample_id}: cannot decode image: {err}")
     except (ShardError, OSError, tarfile.TarError) as err:
-        problems.append(f"cannot read images: {err}")
+        return [*problems, f"cannot read images: {err}"]
+    if read < len(records):
+        problems.append(f"manifest lists {len(records)} samples but storage holds {read}")
     return problems
 
 

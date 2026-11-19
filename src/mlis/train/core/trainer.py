@@ -104,8 +104,8 @@ class Trainer:
 
     def train(self) -> TrainResult:
         seed_everything(self._config.seed)
-        resumed_from = self._maybe_resume()
         self._parts.model.to(self._device)
+        resumed_from = self._maybe_resume()
         self._log.event(
             "start",
             step=self._step,

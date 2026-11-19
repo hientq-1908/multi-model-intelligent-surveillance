@@ -64,13 +64,13 @@ def make_trainer(config: RunConfig, clock=None) -> tuple[Trainer, TinyNet]:
         loss = torch.nn.functional.mse_loss(model(batch["x"]), batch["y"])
         return LossOutput(loss=loss, metrics={"mse": float(loss.detach())})
 
+    optimizer = build_optimizer(model, config)
     components = TrainComponents(
         model=model,
         compute_loss=compute_loss,
-        optimizer=build_optimizer(model, config),
-        scheduler=build_scheduler(build_optimizer(model, config), config),
+        optimizer=optimizer,
+        scheduler=build_scheduler(optimizer, config),
         data=IndexedBatchStream(make_dataset(), config.batch_size, config.seed, collate),
     )
-    components.scheduler = build_scheduler(components.optimizer, config)
     kwargs = {} if clock is None else {"clock": clock}
     return Trainer(config, components, **kwargs), model

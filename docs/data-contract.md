@@ -81,6 +81,7 @@ uv run python -m mlis.data.validate path/to/manifest.jsonl
 ```
 
 It checks the header, every record, the sample count, duplicate ids, that every listed shard exists and that every image decodes.
+For shard-backed datasets it also checks that the shards hold exactly the manifest records, in the same order, so a rewritten manifest must be repacked with new shards.
 It exits non-zero and prints each problem.
 Every dataset task runs it on its output and calls `validate_dataset` from its tests.
 

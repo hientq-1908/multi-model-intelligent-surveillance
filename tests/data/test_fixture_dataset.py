@@ -1,4 +1,4 @@
-from mlis.data.manifest import read_manifest
+from mlis.data.manifest import read_manifest, write_manifest
 from mlis.data.reader import iter_samples
 from mlis.data.schema import LicenceTag
 from mlis.data.synthetic import build_fixture, make_records
@@ -71,6 +71,26 @@ def test_validator_flags_undecodable_image(tmp_path):
     (tmp_path / "tiny_files" / "images" / "gen000.png").write_bytes(b"not a png")
     problems = validate_dataset(tmp_path / "tiny_files" / "manifest.jsonl")
     assert any("gen000" in p and "decode" in p for p in problems)
+
+
+def test_validator_flags_shard_manifest_that_drops_a_stored_sample(tmp_path):
+    build_fixture(tmp_path)
+    manifest = tmp_path / "tiny_shards" / "manifest.jsonl"
+    header, records = read_manifest(manifest)
+    kept = [r for r in records if r.sample_id != "gen002"]
+    write_manifest(manifest, kept, dataset=header.dataset, shards=header.shards)
+    problems = validate_dataset(manifest, decode_images=False)
+    assert any("gen002" in p for p in problems)
+
+
+def test_validator_flags_shard_manifest_with_edited_record(tmp_path):
+    build_fixture(tmp_path)
+    manifest = tmp_path / "tiny_shards" / "manifest.jsonl"
+    header, records = read_manifest(manifest)
+    records[0] = records[0].model_copy(update={"texts": ["rewritten caption"]})
+    write_manifest(manifest, records, dataset=header.dataset, shards=header.shards)
+    problems = validate_dataset(manifest)
+    assert any("position 0" in p and "gen000" in p for p in problems)
 
 
 def test_validator_cli_reports_ok(shard_manifest, capsys):
