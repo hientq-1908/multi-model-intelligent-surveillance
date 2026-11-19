@@ -1,0 +1,36 @@
+# Environments
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Data, models and run output: never committed
+/data/
+/datasets/
+/checkpoints/
+/runs/
+/outputs/
+/wandb/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+
+# Dataset shards are only allowed as tiny test fixtures
+*.tar
+!tests/fixtures/**/*.tar
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Editor and agent local state
+.idea/
+.vscode/
+.claude/settings.local.json

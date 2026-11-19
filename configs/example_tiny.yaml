@@ -1,0 +1,23 @@
+# Example run config: one YAML file per run.
+# The `model` and `data` sections are free-form and validated by the stage that reads them.
+run_name: example-tiny
+output_dir: runs/example-tiny
+seed: 0
+max_steps: 20
+batch_size: 4
+grad_accum_steps: 1
+learning_rate: 1.0e-3
+weight_decay: 0.0
+warmup_steps: 2
+min_lr_ratio: 0.1
+grad_clip_norm: 1.0
+precision: fp32        # bf16 | fp32
+device: cpu            # auto | cpu | cuda
+checkpoint_every_minutes: 30
+keep_last_checkpoints: 2
+log_every_steps: 5
+resume: auto           # auto | never | path to a checkpoint
+model: {}
+data:
+  manifests:
+    - tests/fixtures/tiny_shards/manifest.jsonl
