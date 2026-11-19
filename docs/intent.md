@@ -322,7 +322,7 @@ See [spec.md](spec.md), section 7.11.
 | Model | Hidden size | Role |
 |---|---|---|
 | Qwen3-0.6B | 1024 | Cloud smoke tests |
-| Qwen3-1.7B | 2048 | Fallback if the budget cannot cover Qwen3-4B |
+| Qwen3-1.7B | 2048 | Fallback only; not expected to be needed, since money is not a constraint (see [Cost estimate](#cost-estimate)) |
 | Qwen3-4B | 2560 | Main model for all phases |
 
 Stage 1 does not involve the LLM, so one trained Q-Former serves all three sizes.
