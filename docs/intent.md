@@ -51,7 +51,7 @@ Query:     text -> vector search -> ITM re-rank -> top matches
 | DINOv3 ViT-L/16 | Image features | No, frozen |
 | Q-Former, 64 queries | Compress and align to language; search vectors | Yes |
 | Projector | Map to the LLM input space | Yes |
-| Qwen3-4B | Describe, confirm matches, summarise | LoRA only |
+| Qwen3-4B-Instruct-2507 | Describe, confirm matches, summarise | LoRA only |
 | Person detector and tracker | Find and follow people | No, off the shelf |
 
 "Fully finetune" in the original request means training the adapter parts and LoRA across all three stages.
@@ -80,7 +80,7 @@ Each compares two choices on the same data and evaluation, and is reported in th
 
 | # | Question | Option A | Option B | Compared on |
 |---|---|---|---|---|
-| E1 | Should the Q-Former train after stage 1? | Frozen in stages 2 and 3. Outputs can be cached. Run first | Trained in stage 2, and optionally 3. No caching | Caption and answer quality on a fixed set, GPU-hours |
+| E1 | Should the Q-Former train after stage 1? | Frozen in stages 2 and 3. Run first | Trained in stage 2, and optionally 3 | Caption and answer quality on a fixed set, GPU-hours |
 | E2 | How should a long track be described? | 4a: describe segments, then summarise as text | 4b: several frames in one prompt, with multi-frame training | MEVA reference timelines, same clips |
 
 `idea.md` does not say which option the original author used for E1.
@@ -131,8 +131,9 @@ E1 is therefore a quality comparison more than a cost one.
   - DINOv3 needs bf16 or fp32; a maintainer states it does not support fp16 (<https://github.com/facebookresearch/dinov3/issues/181>).
   - The Hugging Face DINOv3 processor resizes every image to 224x224 by default, which squashes tall person crops; its RoPE accepts non-square input with each side a multiple of 16 (<https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m>).
   - DINOv3 jitters RoPE coordinates in train mode, so the frozen encoder stays in `eval()` mode.
-  - Qwen3 thinking mode must be off.
-    With `enable_thinking=False` the Qwen3-4B chat template still emits an empty `<think>\n\n</think>\n\n` block on assistant turns (<https://huggingface.co/Qwen/Qwen3-4B>).
+  - The main model, Qwen3-4B-Instruct-2507, has no thinking mode.
+    The Qwen3-0.6B smoke model does, and it must be off.
+    With `enable_thinking=False` the hybrid Qwen3 chat template still emits an empty `<think>\n\n</think>\n\n` block on assistant turns (<https://huggingface.co/Qwen/Qwen3-4B>).
   - Drop DINOv3 register tokens and feed patch tokens to the Q-Former **(proposed)**.
     ViT-L/16 has 4 registers after CLS, so the Hugging Face output layout is `[CLS, 4 registers, patches]` and the patch tokens are `last_hidden_state[:, 5:, :]`.
 
@@ -149,14 +150,13 @@ Subset sizes are proposals and depend on the compute budget.
 | Dataset | Content | Licence / access | Use | Status |
 |---|---|---|---|---|
 | COCO Captions | ~118k images, 5 captions each | Annotations CC BY 4.0, images under Flickr terms ([COCO terms]) | General base, run first | V |
-| CC3M | 3,318,333 web image-caption training pairs, by URL. About 61% of a 400-URL sample still resolved on 2026-11-18. The repository was archived on 2026-04-19 | "May be freely used for any purpose" ([CC3M]) | Optional 300k to 500k subset | V |
 | CUHK-PEDES | Official training split: 34,054 images, 11,003 identities, 68,126 descriptions (about 2 each) | Authors release on request, academic only ([CUHK-PEDES]). Used here from an unofficial Hugging Face copy, which has no licence tag and no statement of permission ([CUHK-PEDES HF copy]) | Person search training and a test split made here | V |
 | ICFG-PEDES | 54,522 images, 4,102 identities, 1 description each; train 34,674, test 19,848. "All images are gathered from the MSMT17 database" ([SSAN paper]) | Public download: since 2026-06-06 the SSAN repository links a Baidu Pan share ([SSAN]). No terms of its own; MSMT17 terms apply in spirit | Official training split for training; official test split as a reference test set | V |
 | RSTPReid | 20,505 images, 4,101 identities, 2 descriptions each; train 18,505, val 1,000, test 1,000. Built from MSMT17, with files renamed | Public Google Drive download, linked from the official repository. The repository's MIT licence covers "the Software"; there are no dataset terms ([RSTPReid]) | Official training split for training; official test split as a reference test set | V |
 | MSMT17 (source of ICFG-PEDES and RSTPReid, not downloaded) | Person re-identification images | Official page offline since July 2019. Its agreement: academic research only, no further distribution, "The performance computed on MSMT17 can be reported and released. No images in MSMT17 could be published" | No MSMT17-derived image is shown in the README or demo | V |
 | MALS | 1,510,330 synthetic person images with captions and 27 attributes. Generated with Stable Diffusion prompted by CUHK-PEDES and ICFG-PEDES captions, then re-captioned by BLIP ([APTM paper]) | "Can only be used for research; any commercial usage is forbidden" ([APTM]) | 200k to 300k subset. Images are generated, so no real people | V |
 | PA-100K | 100k pedestrian images, 26 attributes | CC BY 4.0 ([PA-100K]) | Attribute source for generated captions | V |
-| UPAR | Unified attributes with colours, over PA-100K, PETA, RAPv2, Market-1501 | Annotations CC BY-NC-SA 3.0 DE, images follow their sources ([UPAR]). RAPv2 needs an agreement signed by someone with legal authority for an organisation ([RAP]) | Colour attributes for generated captions | V |
+| UPAR | Unified attributes with colours, over PA-100K, PETA, RAPv2, Market-1501 | Annotations CC BY-NC-SA 3.0 DE, images follow their sources ([UPAR]). RAPv2 needs an agreement signed by someone with legal authority for an organisation ([RAP]) | Colour attributes for generated captions, on PA-100K images only. RAPv2 and the other UPAR parts are not used | V |
 
 CUHK-PEDES has 40,206 images and 80,412 descriptions in all, but its authors release it only on request.
 This project uses an unofficial Hugging Face copy of the training split (`MaulikMadhavi/CUHK-PEDES-processed`, 34,052 rows, two fewer than the official training split), joins it to the authors' public `reid_raw.json` for identities and original captions, and makes its own train, validation and test split by identity.
@@ -169,7 +169,7 @@ Below, "PEDES" means CUHK-PEDES, ICFG-PEDES and RSTPReid.
 
 | Dataset | Content | Licence / access | Use | Status |
 |---|---|---|---|---|
-| BLIP3o-Pretrain-Long-Caption | ~27.2M image and long-caption pairs (about 120 tokens, written by Qwen2.5-VL-7B), WebDataset shards: 2,891 shards, 1,374 GB in all | Card says Apache-2.0, but the shards hold images under their source terms: `sa_*` shards (565 GB) are SA-1B, "research purposes only"; `webdataset_JDB_*` shards (172 GB) are JourneyDB, non-commercial and not to be redistributed; `webdataset_shard_*` shards (637 GB) are CC12M-sourced, and CC12M "may be freely used for any purpose" ([BLIP3o], [CC12M]) | 300k to 500k subset, taken as whole shards | V |
+| BLIP3o-Pretrain-Long-Caption | ~27.2M image and long-caption pairs (about 120 tokens, written by Qwen2.5-VL-7B), WebDataset shards: 2,891 shards, 1,374 GB in all | Card says Apache-2.0, but the shards hold images under their source terms: `sa_*` shards (565 GB) are SA-1B, "research purposes only"; `webdataset_JDB_*` shards (172 GB) are JourneyDB, non-commercial and not to be redistributed; `webdataset_shard_*` shards (637 GB) are CC12M-sourced, and CC12M "may be freely used for any purpose" ([BLIP3o], [CC12M]) | 300k to 500k subset, taken as whole CC12M-sourced `webdataset_shard_*` shards only | V |
 | CUHK-PEDES, ICFG-PEDES, RSTPReid | Same as stage 1 | Same | Captions reused as "describe this person" targets | as above |
 
 ### Stage 3: instruction tuning
@@ -196,7 +196,6 @@ Below, "PEDES" means CUHK-PEDES, ICFG-PEDES and RSTPReid.
 | MEVA | Multi-camera surveillance-style video with consenting actors, 1080p at 30 fps; 5-minute clips of 70 to 250 MB. 37 activity types with tracks, but boxes exist only for actors and props involved in annotated activities, not for every person ([MEVA repository], [MEVA paper]) | CC BY 4.0, free download from AWS ([MEVA licence]) | Demo clips; activity annotations as reference timelines for phase 4, scored on annotated actors only | V |
 
 [COCO terms]: https://cocodataset.org/dataset/termsofuse.htm
-[CC3M]: https://github.com/google-research-datasets/conceptual-captions
 [CUHK-PEDES]: https://github.com/ShuangLI59/Person-Search-with-Natural-Language-Description
 [CUHK-PEDES HF copy]: https://huggingface.co/datasets/MaulikMadhavi/CUHK-PEDES-processed
 [SSAN]: https://github.com/zifyloo/SSAN
@@ -222,9 +221,9 @@ Below, "PEDES" means CUHK-PEDES, ICFG-PEDES and RSTPReid.
 
 | Built set | From | Method | Feeds |
 |---|---|---|---|
-| Attribute captions | PA-100K, UPAR, MALS attributes | Code template turns attributes into a sentence; optional rewording by a text LLM | Stage 1 |
+| Attribute captions | PA-100K attributes with UPAR colours, MALS attributes | Code template turns attributes into a sentence; optional rewording by a text LLM | Stage 1 |
 | Hard negative captions | Any attribute or PEDES caption | Code swaps one attribute (red to blue, hat to no hat) to make a near-miss | Stage 1 ITM. Targets the "red shirt and hat on the same person" weakness |
-| Attribute yes/no questions | PA-100K, UPAR | Code writes "Is this person wearing a hat?" with balanced yes and no | Stage 3, for the confirm step |
+| Attribute yes/no questions | PA-100K attributes with UPAR colours | Code writes "Is this person wearing a hat?" with balanced yes and no | Stage 3, for the confirm step |
 | Match checks | PEDES pairs plus hard negatives | Code writes "Does this person match: <text>?" | Stage 3, for the confirm step |
 | Person question-answer pairs | PEDES captions | Text LLM turns each caption into questions and answers, from the caption only | Stage 3 |
 | Surveillance frame captions | UCA | Code samples frames inside each timestamped event | Stage 3, phase 4b |
@@ -243,7 +242,7 @@ Below, "PEDES" means CUHK-PEDES, ICFG-PEDES and RSTPReid.
   Training images that are near-duplicates of these test images, and images of the same MSMT17 people in the other MSMT17-based set, are dropped, because the person datasets share sources.
   RSTPReid uses all 4,101 MSMT17 identities and ICFG-PEDES 4,102, so every RSTPReid test identity also appears in ICFG-PEDES.
   RSTPReid renamed its files, so this rule needs image near-duplicate search, not file names.
-  CUHK-PEDES source images include Market-1501 and VIPeR, which UPAR (through Market-1501 and PETA) also covers.
+  CUHK-PEDES source images include Market-1501 and VIPeR, which UPAR also covers through Market-1501 and PETA, so UPAR is used on its PA-100K images only.
 - Person search on surveillance-style images: attribute retrieval on the PA-100K test split, which needs no access request; hand-judged precision at 5 on fixed MEVA queries.
 - Descriptions: UCA test sentences; fixed hand-checked examples from MEVA.
 - Phase 4: MEVA reference timelines, option 4a against 4b.
@@ -260,13 +259,15 @@ Below, "PEDES" means CUHK-PEDES, ICFG-PEDES and RSTPReid.
   The repository lists every dataset with its licence, and the demo carries a research-only notice.
   No weights are released (see [Decisions](#decisions)), which removes the question of what the person-search sets and the DINOv3 licence allow for released weights.
 - BLIP3o's shards mix CC12M-sourced images with SA-1B (research only) and JourneyDB (non-commercial) images, so the licence of a subset depends on which shards it takes.
+  Only the CC12M-sourced shards are used (see [Decisions](#decisions)).
 - MALS images were generated from CUHK-PEDES and ICFG-PEDES captions.
   Whether test-split captions were among the prompts is not known.
 - UCF-Crime is mostly crime and accident footage, so it skews what the model describes and contains violent scenes.
 - Generated captions and questions carry the errors of the model or template that made them.
 - A single frame cannot show an event that unfolds over time.
   UCA sentences are paired with single frames only for short spans, balanced between normal and anomaly videos and capped at a small share of stage 3; full events are used for phase 4b.
-- Access can stall the start: DINOv3 on Hugging Face is approved by hand, and a maintainer says affiliation and country are common reasons for rejection (<https://github.com/facebookresearch/dinov3/issues/376>).
+- DINOv3 on Hugging Face is approved by hand, and a maintainer says affiliation and country are common reasons for rejection (<https://github.com/facebookresearch/dinov3/issues/376>).
+  Access to `facebook/dinov3-vitl16-pretrain-lvd1689m` has been granted to the author's Hugging Face user, so this no longer blocks the start.
 - A design review on 2026-11-16 found the gaps these rules close.
   See [spec.md](spec.md), section 2.9.
 
@@ -321,7 +322,7 @@ See [spec.md](spec.md), section 7.11.
 |---|---|---|
 | Qwen3-0.6B | 1024 | Cloud smoke tests |
 | Qwen3-1.7B | 2048 | Fallback only; not expected to be needed, since money is not a constraint (see [Cost estimate](#cost-estimate)) |
-| Qwen3-4B | 2560 | Main model for all phases |
+| Qwen3-4B-Instruct-2507 | 2560 | Main model for all phases |
 
 Stage 1 does not involve the LLM, so one trained Q-Former serves all three sizes.
 Only the projector and LoRA are retrained per LLM.
@@ -338,7 +339,7 @@ Only the projector and LoRA are retrained per LLM.
 | Phase 4b, Qwen3-4B | UCA events, M4-Instruct subset ~50k | 13 to 27 |
 | **Planned total** | | **70 to 115** |
 | Reruns and failed runs | Roughly the same again | 60 to 100 |
-| Preflight, packing, feature caching on the server | | 5 to 15 |
+| Preflight and packing on the server | | 5 to 15 |
 
 These hours were first estimated for one RTX 4090 with Qwen3-4B in 4-bit, for a realistic total with reruns of 135 to 230 GPU-hours.
 The review's FLOP arithmetic and published training costs (LLaVA-1.5, <https://github.com/haotian-liu/LLaVA>; MiniGPT-4, <https://arxiv.org/abs/2304.10592>) find them plausible and probably 1.2 to 2 times conservative.
@@ -360,8 +361,8 @@ A CPU-only packing machine for a few days is small next to the GPU cost.
 
 - Pack each dataset into shards and keep them on the persistent RunPod volume, so each pod mounts them instead of downloading again.
   Sets with unverified or restrictive terms (MSMT17-derived sets, CUHK-PEDES, MALS, UCA, JourneyDB shards) are never uploaded to the Hugging Face Hub.
-- Cache what is frozen.
-  Q-Former outputs for stages 2 and 3 are about 96 KiB per image (64 x 768 in bf16), if the Q-Former is kept frozen there.
+- Do not cache DINOv3 or Q-Former features (see [Decisions](#decisions)).
+  Their forward pass is under 2% of an LLM stage (see [Experiments](#experiments)).
 - Save checkpoints to the persistent volume every 30 to 60 minutes and make every script resumable, because community-cloud hosts can disappear.
 - Stop the machine when a run ends.
   Log GPU-hours per run against the estimate.
@@ -415,29 +416,31 @@ Recorded on 2026-11-19, after the feasibility review.
 | 2 | First milestone: phases 1 to 3 plus E1, in 4 to 6 weeks. Phase 4 and E2 follow. | The serial critical path and rerun allowance make the full scope 7 to 10 weeks; this cut ships a complete result first. |
 | 3 | CUHK-PEDES: keep the unofficial Hugging Face copy for training and evaluation. | The official copy is by email only, with uncertain reply; with no weights released, the copy is used only for research results. |
 | 4 | Training hardware: RTX A6000 48 GB on RunPod community cloud, training in bf16, not 4-bit; NF4 only for the 8 GB local demo. A persistent RunPod volume holds datasets, and checkpoints are saved every 30 to 60 minutes because community hosts can disappear. | It is the cheapest option at review time (about $39 to $67) and removes the slower, more fragile 4-bit training path. |
+| 5 | Initialise the Q-Former from BERT-base. | BLIP-2 does the same, and pre-CLIP person-search methods gain several Recall@1 points from a pretrained BERT text side (see [Risks](#risks)). |
+| 6 | Main LLM: Qwen3-4B-Instruct-2507. Smoke tests use Qwen3-0.6B. | It has the same hidden size as Qwen3-4B and no thinking switch, so no empty think block enters the training targets. The 0.6B model keeps smoke tests cheap. |
+| 7 | Take BLIP3o shards from the CC12M-sourced `webdataset_shard_*` set only. | CC12M "may be freely used for any purpose", while the SA-1B shards are research-only and the JourneyDB shards non-commercial. The 637 GB CC12M-sourced set is far more than the 300k to 500k subset needs. |
+| 8 | No feature caching for DINOv3 or the Q-Former. | Their forward pass for 300k images takes 10 to 15 minutes, under 2% of an LLM stage, and E1 option B cannot use a cache anyway. |
+| 9 | Drop CC3M. | Only about 61% of its URLs still resolved and its repository is archived; COCO and the BLIP3o subset cover general image-text pairs. |
+| 10 | Drop RAPv2, and with it most of UPAR; UPAR is used on PA-100K images only. | RAPv2 needs an agreement signed by someone with legal authority for an organisation. Keeping only PA-100K also avoids the UPAR sources that overlap CUHK-PEDES. |
+| 11 | An identity-aware contrastive loss for person data, as an optional switch, off by default. | Person sets have several images and captions per identity, which plain ITC treats as negatives. Keeping it off by default leaves a plain baseline to compare against. |
+| 12 | Defer person captions written by Qwen3-VL. | Template captions are enough for the first milestone, and model-written captions add GPU-hours and that model's errors. |
 
 These close the former open questions on the money budget, the order of work, weight release and the CUHK-PEDES source, and the cloud provider and GPU size.
+Decisions 5 to 12 adopt review recommendations, together with splitting the first-milestone code into one foundation task and independent parallel tasks.
 
 ## Review recommendations under consideration
 
 The feasibility review of 2026-11-18 made further recommendations that are not adopted as plan changes yet.
 Numbers refer to its Recommendations list.
-Recommendations 7, 9 and 15 are covered by decisions 2 and 4, and recommendation 12 (data table corrections) is applied above.
+Recommendations 7, 9 and 15 are covered by decisions 2 and 4, recommendations 5, 8, 10, 13, 14, 16 and 17 and part of 6 by decisions 5 to 12, and recommendation 12 (data table corrections) is applied above.
 
 - 1: request DINOv3 and CUHK-PEDES access on day 0; if Meta refuses DINOv3, switch to DINOv2 ViT-L (Apache-2.0, ungated) rather than a mirror.
 - 2: run zero-shot baselines first (SigLIP2 and DINOv3 dino.txt retrieval, Qwen3-VL-4B descriptions) to set the bar and give a fallback demo.
 - 3: a week-1 kill test of the core design on COCO Karpathy and RSTPReid before any long run.
 - 4: build one leakage filter (COCO ids, PEDES near-duplicates, UPAR restricted to PA-100K images, SurveillanceVQA and MEVA video names) before packing.
-- 5: initialise the Q-Former from BERT-base, as BLIP-2 did.
-- 6: an identity-aware contrastive target for person data, and a momentum queue or larger effective batch for ITC.
+- 6 (remaining part): a momentum queue or larger effective batch for ITC.
 - 7 (remaining part): evaluate the NF4 demo configuration separately from the bf16 model.
-- 8: switch to Qwen3-4B-Instruct-2507 (same hidden size, no thinking switch).
-- 10: take BLIP3o shards from the CC12M-sourced `webdataset_shard_*` set only.
 - 11: use RF-DETR (N to L) or D-FINE with ByteTrack; avoid Ultralytics and BoxMOT.
-- 13: replace part of the template captions with person captions written by Qwen3-VL on PA-100K images.
-- 14: do not build feature caching for DINOv3 or the Q-Former.
-- 16: drop CC3M scraping.
-- 17: drop RAPv2, and with it most of UPAR, unless an institution signs.
 - 18 and 19: publishing rules; 18 (weights as DINOv3 derivatives) is moot with no weights released, and 19 (never publish images, captions, processed annotations or cached features; show no MSMT17, CUHK-PEDES or RAP images) still applies to the README and write-up.
 
 ## Open questions
