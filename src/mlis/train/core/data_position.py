@@ -20,6 +20,13 @@ class ResumableData(Protocol):
 
     def __next__(self) -> Any: ...
 
+    def _epoch_order(self) -> list[int]:
+        if self._order_epoch != self._epoch:
+            order = list(range(len(self._dataset)))
+            random.Random(f"{self._seed}:{self._epoch}").shuffle(order)
+            self._order, self._order_epoch = order, self._epoch
+        return self._order
+
     def state_dict(self) -> dict[str, Any]: ...
 
     def load_state_dict(self, state: dict[str, Any]) -> None: ...
@@ -49,6 +56,8 @@ class IndexedBatchStream:
         self._batches_per_epoch = len(dataset) // batch_size
         self._epoch = 0
         self._batch_in_epoch = 0
+        self._order_epoch: int | None = None
+        self._order: list[int] = []
 
     def __iter__(self) -> IndexedBatchStream:
         return self
@@ -57,12 +66,17 @@ class IndexedBatchStream:
         if self._batch_in_epoch >= self._batches_per_epoch:
             self._epoch += 1
             self._batch_in_epoch = 0
-        order = list(range(len(self._dataset)))
-        random.Random(f"{self._seed}:{self._epoch}").shuffle(order)
         start = self._batch_in_epoch * self._batch_size
-        indices = order[start : start + self._batch_size]
+        indices = self._epoch_order()[start : start + self._batch_size]
         self._batch_in_epoch += 1
         return self._collate([self._dataset[i] for i in indices])
+
+    def _epoch_order(self) -> list[int]:
+        if self._order_epoch != self._epoch:
+            order = list(range(len(self._dataset)))
+            random.Random(f"{self._seed}:{self._epoch}").shuffle(order)
+            self._order, self._order_epoch = order, self._epoch
+        return self._order
 
     def state_dict(self) -> dict[str, Any]:
         return {"epoch": self._epoch, "batch_in_epoch": self._batch_in_epoch}
