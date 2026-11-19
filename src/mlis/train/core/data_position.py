@@ -20,13 +20,6 @@ class ResumableData(Protocol):
 
     def __next__(self) -> Any: ...
 
-    def _epoch_order(self) -> list[int]:
-        if self._order_epoch != self._epoch:
-            order = list(range(len(self._dataset)))
-            random.Random(f"{self._seed}:{self._epoch}").shuffle(order)
-            self._order, self._order_epoch = order, self._epoch
-        return self._order
-
     def state_dict(self) -> dict[str, Any]: ...
 
     def load_state_dict(self, state: dict[str, Any]) -> None: ...
