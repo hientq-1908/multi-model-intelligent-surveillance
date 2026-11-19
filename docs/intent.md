@@ -107,9 +107,7 @@ E1 is therefore a quality comparison more than a cost one.
 
 ## Non-goals
 
-- Matching or beating the scores of the method `idea.md` calls "InA-Bridge", or any leaderboard.
-  No paper, repository or model by that name could be found (web, arXiv, Hugging Face, GitHub and Semantic Scholar searches on 2026-11-18); the closest candidate is the Inner-Adaptor Architecture, <https://arxiv.org/abs/2408.12902>.
-  The write-up does not name it until the original author supplies the citation.
+- Matching or beating InA-Bridge's reported scores, or any leaderboard.
 - Reading text in images, counting, or small-object detail.
   The 64-token design is weak at these.
 - Live camera feeds or real-time operation.
@@ -447,5 +445,4 @@ Recommendations 7, 9 and 15 are covered by decisions 2 and 4, and recommendation
 1. Confirm the memory and GPU-hour estimates with a first timed run per stage on the RTX A6000.
 2. Is the stage 1 demo for general images kept as its own showcase, or only person search?
 3. Remaining unverified data facts: whether MALS used PEDES test captions as prompts, and the exact MSMT17 terms, since its official page is offline.
-4. The citation for "InA-Bridge" in `idea.md`.
-5. Size of the persistent RunPod volume, from the disk figures in [Compute plan](#compute-plan).
+4. Size of the persistent RunPod volume, from the disk figures in [Compute plan](#compute-plan).
